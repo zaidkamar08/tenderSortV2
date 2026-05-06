@@ -17,26 +17,23 @@ except ImportError:
 from dotenv import load_dotenv
 load_dotenv()
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 print("=" * 50)
-print(f"OPENROUTER API KEY: {'FOUND - ' + OPENROUTER_API_KEY[:12] + '...' if OPENROUTER_API_KEY else 'NOT FOUND'}")
+print(f"GROQ API KEY: {'FOUND - ' + GROQ_API_KEY[:12] + '...' if GROQ_API_KEY else 'NOT FOUND'}")
 print(f"PyMuPDF: {'Available' if PYMUPDF_AVAILABLE else 'NOT Available'}")
-print(f"Using: OpenRouter API (mistral-7b) - Free & Fast!")
+print(f"Using: Groq API (llama-3.3-70b)")
 print("=" * 50)
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# ── OpenRouter API call ───────────────────────────────────────────────────────
 def ask_ai(prompt: str) -> str:
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://tendersort.netlify.app",
-        "X-Title": "TenderSort"
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
     }
     payload = {
-        "model": "meta-llama/llama-3.2-3b-instruct:free",
+        "model": "llama-3.3-70b-versatile",
         "messages": [
             {
                 "role": "system",
@@ -51,29 +48,29 @@ def ask_ai(prompt: str) -> str:
         "max_tokens": 4096,
     }
 
-    for attempt in range(3):
-        print(f"Calling OpenRouter API (attempt {attempt + 1})...")
-        response = requests.post(OPENROUTER_URL, json=payload, headers=headers, timeout=60)
-        print(f"OpenRouter status: {response.status_code}")
+    for attempt in range(4):
+        print(f"Calling Groq API (attempt {attempt + 1})...")
+        response = requests.post(GROQ_URL, json=payload, headers=headers, timeout=60)
+        print(f"Groq status: {response.status_code}")
 
         if response.status_code == 200:
             data = response.json()
             text = data["choices"][0]["message"]["content"]
-            print(f"OpenRouter response length: {len(text)}")
+            print(f"Groq response length: {len(text)}")
+            time.sleep(3)
             return text
 
         elif response.status_code == 429:
-            wait = 10 * (attempt + 1)
+            wait = 20 * (attempt + 1)
             print(f"Rate limited! Waiting {wait} seconds...")
             time.sleep(wait)
 
         else:
-            print(f"OpenRouter error: {response.text[:500]}")
-            raise Exception(f"OpenRouter API error {response.status_code}: {response.text[:200]}")
+            print(f"Groq error: {response.text[:500]}")
+            raise Exception(f"Groq API error {response.status_code}: {response.text[:200]}")
 
-    raise Exception("OpenRouter API rate limit exceeded after 3 retries.")
+    raise Exception("Groq API rate limit exceeded after 4 retries.")
 
-# ── PDF text extraction ───────────────────────────────────────────────────────
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     if not PYMUPDF_AVAILABLE:
         return "[PyMuPDF not installed]"
@@ -111,8 +108,7 @@ def parse_json(text: str) -> dict:
         pass
     return {}
 
-# ── App setup ─────────────────────────────────────────────────────────────────
-app = FastAPI(title="TenderSort API", version="4.0.0")
+app = FastAPI(title="TenderSort API", version="6.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -126,10 +122,10 @@ app.add_middleware(
 def root():
     return {
         "message": "TenderSort API is running!",
-        "version": "4.0.0",
-        "openrouter_key_loaded": bool(OPENROUTER_API_KEY),
+        "version": "6.0.0",
+        "groq_key_loaded": bool(GROQ_API_KEY),
         "pymupdf_ready": PYMUPDF_AVAILABLE,
-        "ai_provider": "OpenRouter (mistral-7b-instruct)"
+        "ai_provider": "Groq (llama-3.3-70b)"
     }
 
 @app.get("/health")
@@ -146,7 +142,6 @@ async def full_evaluation(
     print(f"Bidders: {[f.filename for f in bidder_files]}")
 
     try:
-        # Step 1 — extract tender text
         tender_bytes = await tender_file.read()
         tender_text = extract_text(tender_bytes, tender_file.filename)
         print(f"Tender text: {len(tender_text)} chars")
@@ -154,7 +149,6 @@ async def full_evaluation(
         if len(tender_text) < 10:
             raise HTTPException(status_code=400, detail="Could not extract text from tender PDF.")
 
-        # Step 2 — extract criteria
         criteria_prompt = f"""Extract eligibility criteria from this government tender document.
 Return ONLY valid JSON in exactly this format with no extra text or markdown:
 {{"tender_title": "short title", "criteria": [{{"id": "c1", "label": "Criterion Name", "type": "Financial", "requirement": "exact requirement", "mandatory": true}}]}}
@@ -182,7 +176,6 @@ Tender document:
         criteria = criteria_data.get("criteria", [])
         print(f"Criteria count: {len(criteria)}")
 
-        # Step 3 — evaluate each bidder
         bidder_results = []
         for bidder_file in bidder_files:
             print(f"\nEvaluating: {bidder_file.filename}")
