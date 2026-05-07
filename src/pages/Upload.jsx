@@ -63,7 +63,7 @@ export default function Upload() {
     const formData = new FormData()
     formData.append('tender_file', tenderFile)
     bidderFiles.forEach(f => formData.append('bidder_files', f))
-    const response = await fetch('https://tendorsort-production.up.railway.app/full-evaluation', {
+    const response = await fetch('https://tendersortv2.onrender.com/full-evaluation', {
       method: 'POST',
       body: formData,
     })

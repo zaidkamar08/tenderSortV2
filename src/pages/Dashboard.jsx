@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronUp, FileBarChart, Filter } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronUp, FileBarChart, Filter, Download } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
 const VerdictBadge = ({ verdict }) => {
@@ -52,7 +52,6 @@ export default function Dashboard() {
   const [evalData, setEvalData] = useState(null)
 
   useEffect(() => {
-    // Read real result from localStorage (set by Upload page after API call)
     const stored = localStorage.getItem('evaluationResult')
     if (stored) {
       try {
@@ -64,7 +63,190 @@ export default function Dashboard() {
     }
   }, [])
 
-  // If no real data yet, show empty state
+  // ── PDF Export via browser print ──────────────────────────────────────────
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank')
+    const bidders = evalData.bidders || []
+    const criteria = evalData.criteria || []
+    const summary = evalData.summary || {}
+
+    const getStatusText = (status) => {
+      if (status === 'pass') return '✓ Pass'
+      if (status === 'fail') return '✗ Fail'
+      return '~ Review'
+    }
+
+    const getStatusColor = (status) => {
+      if (status === 'pass') return '#16a34a'
+      if (status === 'fail') return '#dc2626'
+      return '#d97706'
+    }
+
+    const getVerdictColor = (verdict) => {
+      if (verdict === 'eligible') return '#16a34a'
+      if (verdict === 'rejected') return '#dc2626'
+      return '#d97706'
+    }
+
+    const getVerdictText = (verdict) => {
+      if (verdict === 'eligible') return 'Eligible'
+      if (verdict === 'rejected') return 'Not Eligible'
+      return 'Manual Review'
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>TenderSort Evaluation Report</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; color: #1e293b; padding: 32px; font-size: 13px; }
+
+          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 2px solid #0D9488; padding-bottom: 16px; }
+          .logo { font-size: 22px; font-weight: 800; color: #0D1B2A; }
+          .logo span { color: #0D9488; }
+          .report-meta { text-align: right; color: #64748b; font-size: 11px; }
+
+          .tender-title { font-size: 18px; font-weight: 700; color: #0D1B2A; margin-bottom: 4px; }
+          .tender-sub { font-size: 12px; color: #64748b; margin-bottom: 24px; }
+
+          .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+          .summary-card { border-radius: 10px; padding: 14px; color: white; }
+          .summary-card .num { font-size: 28px; font-weight: 800; }
+          .summary-card .label { font-size: 11px; font-weight: 600; margin-top: 4px; }
+          .summary-card .sub { font-size: 10px; opacity: 0.7; margin-top: 2px; }
+
+          .section-title { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+
+          table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 12px; }
+          th { background: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+          td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+          tr:last-child td { border-bottom: none; }
+          tr:nth-child(even) td { background: #fafafa; }
+
+          .verdict-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; color: white; }
+          .bidder-name { font-weight: 600; color: #0D1B2A; }
+
+          .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; }
+
+          @media print {
+            body { padding: 20px; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">Tender<span>Sort</span></div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">by Byte Verdict</div>
+          </div>
+          <div class="report-meta">
+            <div style="font-weight:600;color:#0D1B2A;">Evaluation Report</div>
+            <div>Generated: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
+            <div>Time: ${new Date().toLocaleTimeString('en-IN')}</div>
+          </div>
+        </div>
+
+        <div class="tender-title">${evalData.tender_title || 'Tender Evaluation'}</div>
+        <div class="tender-sub">AI-powered evaluation complete · ${summary.total || bidders.length} bidders processed</div>
+
+        <div class="summary-grid">
+          <div class="summary-card" style="background:#0D1B2A;">
+            <div class="num">${summary.total || bidders.length}</div>
+            <div class="label">Total Bidders</div>
+            <div class="sub">Submissions received</div>
+          </div>
+          <div class="summary-card" style="background:#10b981;">
+            <div class="num">${summary.eligible || 0}</div>
+            <div class="label">Eligible</div>
+            <div class="sub">All criteria matched</div>
+          </div>
+          <div class="summary-card" style="background:#ef4444;">
+            <div class="num">${summary.rejected || 0}</div>
+            <div class="label">Not Eligible</div>
+            <div class="sub">At least 1 criterion failed</div>
+          </div>
+          <div class="summary-card" style="background:#f59e0b;">
+            <div class="num">${summary.review || 0}</div>
+            <div class="label">Manual Review</div>
+            <div class="sub">Low confidence detected</div>
+          </div>
+        </div>
+
+        <div class="section-title">Bidder Evaluation Results</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Bidder</th>
+              ${criteria.map(c => `<th>${c.label}</th>`).join('')}
+              <th>Confidence</th>
+              <th>Verdict</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bidders.map(b => {
+              const results = b.criteria_results || []
+              return `
+                <tr>
+                  <td class="bidder-name">${b.bidder_name}</td>
+                  ${criteria.map(c => {
+                    const cr = results.find(r => r.id === c.id)
+                    return `<td style="color:${cr ? getStatusColor(cr.status) : '#94a3b8'};font-weight:600;">
+                      ${cr ? getStatusText(cr.status) : '—'}
+                    </td>`
+                  }).join('')}
+                  <td>${b.overall_confidence || 0}%</td>
+                  <td>
+                    <span class="verdict-badge" style="background:${getVerdictColor(b.overall_verdict)};">
+                      ${getVerdictText(b.overall_verdict)}
+                    </span>
+                  </td>
+                </tr>
+              `
+            }).join('')}
+          </tbody>
+        </table>
+
+        <div class="section-title">Eligibility Criteria</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Criterion</th>
+              <th>Type</th>
+              <th>Requirement</th>
+              <th>Mandatory</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${criteria.map(c => `
+              <tr>
+                <td style="font-weight:600;">${c.label}</td>
+                <td>${c.type || '—'}</td>
+                <td>${c.requirement || '—'}</td>
+                <td style="color:${c.mandatory ? '#dc2626' : '#64748b'};font-weight:600;">${c.mandatory ? 'Yes' : 'No'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <div>Generated by TenderSort · AI-Powered Tender Evaluation System</div>
+          <div>Confidential — For internal use only</div>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `
+
+    printWindow.document.write(html)
+    printWindow.document.close()
+  }
+
   if (!evalData) {
     return (
       <div className="max-w-7xl mx-auto px-6 py-20 text-center">
@@ -115,16 +297,19 @@ export default function Dashboard() {
             <AlertTriangle size={15} />
             Review Queue ({review})
           </Link>
-          <Link to="/report" className="btn-primary flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium">
-            <FileBarChart size={15} />
-            Export Report
-          </Link>
+          {/* ── PDF Export Button ── */}
+          <button
+            onClick={handleExportPDF}
+            className="btn-primary flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            <Download size={15} />
+            Download Report
+          </button>
         </div>
       </div>
 
       {/* Top row — Donut + stat cards */}
       <div className="grid md:grid-cols-4 gap-5 mb-8 animate-fade-up delay-100">
-        {/* Donut */}
         <div className="md:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Verdict Breakdown</p>
           <p className="text-sm font-medium text-navy mb-3">{total} bidders evaluated</p>
@@ -156,7 +341,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stat cards */}
         <div className="md:col-span-2 grid grid-cols-2 gap-4">
           {[
             { label: 'Total Bidders', value: total, color: 'bg-[#0D1B2A]', sub: 'Submissions received' },
