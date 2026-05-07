@@ -3,7 +3,9 @@ AI-Powered Government Tender Evaluation System
 by Byte Verdict
 
 Live Links
-ServiceURLFrontend (Netlify)https://tendersorttv2.netlify.app/Backend API (Render)https://tendersortv2.onrender.comAPI Health Checkhttps://tendersortv2.onrender.com/health
+ServiceURLFrontend (Netlify) https://tendersorttv2.netlify.app/
+Backend API (Render) https://tendersortv2.onrender.com
+API Health Check  https://tendersortv2.onrender.com/health
 Note: The backend is hosted on Render's free tier. If the health check takes 30-60 seconds to respond on first visit, that is normal — it is waking up from inactivity. Once awake, it runs at full speed.
 
 What is TenderSort?
